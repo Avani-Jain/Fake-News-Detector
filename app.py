@@ -1,75 +1,71 @@
 import streamlit as st
-# from dash import html, Dash, dcc
-# import plotly.express as px
 import numpy as np
 import re
 import pandas as pd
 import nltk
-nltk.download('corpus')
-nltk.download('stem')
-nltk.download('stopwords')
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
 
+# =======================
+# Ensure required NLTK data is downloaded
+# =======================
+required_packages = ['punkt', 'stopwords']
+for pkg in required_packages:
+    try:
+        nltk.data.find(f'tokenizers/{pkg}' if pkg == 'punkt' else f'corpora/{pkg}')
+    except LookupError:
+        nltk.download(pkg)
 
-# app = Dash(__name__)
-# Load data
+# =======================
+# Load and preprocess data
+# =======================
 news_df = pd.read_csv('train.csv')
 news_df = news_df.fillna(' ')
 news_df['content'] = news_df['author'] + ' ' + news_df['title']
-X = news_df.drop('label', axis=1)
-y = news_df['label']
 
-# Define stemming function
+# Stemming function
 ps = PorterStemmer()
 def stemming(content):
-    stemmed_content = re.sub('[^a-zA-Z]',' ',content)
-    stemmed_content = stemmed_content.lower()
-    stemmed_content = stemmed_content.split()
-    stemmed_content = [ps.stem(word) for word in stemmed_content if not word in stopwords.words('english')]
-    stemmed_content = ' '.join(stemmed_content)
-    return stemmed_content
+    # Remove non-alphabetic characters
+    content = re.sub('[^a-zA-Z]', ' ', content)
+    # Convert to lowercase and split
+    words = content.lower().split()
+    # Remove stopwords and stem
+    words = [ps.stem(word) for word in words if word not in stopwords.words('english')]
+    return ' '.join(words)
 
-# Apply stemming function to content column
 news_df['content'] = news_df['content'].apply(stemming)
 
-# Vectorize data
+# Vectorize
 X = news_df['content'].values
 y = news_df['label'].values
 vector = TfidfVectorizer()
-vector.fit(X)
-X = vector.transform(X)
+X = vector.fit_transform(X)
 
-# Split data into train and test sets
-X_train, X_test, Y_train, Y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=2)
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=2
+)
 
-# Fit logistic regression model
+# Fit model
 model = LogisticRegression()
-model.fit(X_train,Y_train)
+model.fit(X_train, y_train)
 
-
-
-
-# website
-
-
-
+# =======================
+# Streamlit Web App
+# =======================
 st.title('Fake News Detection')
-input_text = st.text_input('Enter news Article to be verified') 
-# the above line will take input of a user for a given article. 
 
-def prediction(input_text):
-    input_data = vector.transform([input_text]) #the input data that we have received has to be passed in the form of a list or vector. that is why we are converting the input text into vector. 
-    prediction = model.predict(input_data)
-    return prediction[0]
+input_text = st.text_input('Enter news article to be verified:')
+
+def predict_news(text):
+    input_vec = vector.transform([text])
+    pred = model.predict(input_vec)[0]
+    return 'Fake' if pred == 1 else 'Real'
 
 if input_text:
-    pred = prediction(input_text)
-    if pred == 1:
-        st.write('The News is Fake')
-    else:
-        st.write('The News Is Real')
+    result = predict_news(input_text)
+    st.write(f'The news is: **{result}**')
